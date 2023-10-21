@@ -48,7 +48,28 @@ class LoggedSelfAttention(nn.Module):
         )
         self.attn_probs = None
 
-    def forward(self, x, context=None, mask=None):
+    def forward(self, x, context=None, mask=None, additional_tokens=None, n_times_crossframe_attn_in_self=0):
+         if additional_tokens is not None:
+            # get the number of masked tokens at the beginning of the output sequence
+            n_tokens_to_mask = additional_tokens.shape[1]
+            # add additional token
+            x = torch.cat([additional_tokens, x], dim=1)
+
+        if n_times_crossframe_attn_in_self:
+            # reprogramming cross-frame attention as in https://arxiv.org/abs/2303.13439
+            assert x.shape[0] % n_times_crossframe_attn_in_self == 0
+            # n_cp = x.shape[0]//n_times_crossframe_attn_in_self
+            k = repeat(
+                k[::n_times_crossframe_attn_in_self],	
+                "b ... -> (b n) ...",
+                n=n_times_crossframe_attn_in_self,
+            )
+            v = repeat(
+                v[::n_times_crossframe_attn_in_self],
+                "b ... -> (b n) ...",
+                n=n_times_crossframe_attn_in_self,
+            )
+        
         h = self.heads
 
         q = self.to_q(x)
@@ -81,9 +102,33 @@ class LoggedSelfAttention(nn.Module):
 
         out = einsum('b i j, b j d -> b i d', sim, v)
         out = rearrange(out, '(b h) n d -> b n (h d)', h=h)
+
+        if additional_tokens is not None:
+            out = out[:, n_tokens_to_mask:]
         return self.to_out(out)
 
-def xattn_forward_log(self, x, context=None, mask=None):
+def xattn_forward_log(self, x, context=None, mask=None, additional_tokens=None, n_times_crossframe_attn_in_self=0):
+    if additional_tokens is not None:
+        # get the number of masked tokens at the beginning of the output sequence
+        n_tokens_to_mask = additional_tokens.shape[1]
+        # add additional token
+        x = torch.cat([additional_tokens, x], dim=1)
+
+    if n_times_crossframe_attn_in_self:
+        # reprogramming cross-frame attention as in https://arxiv.org/abs/2303.13439
+        assert x.shape[0] % n_times_crossframe_attn_in_self == 0
+        # n_cp = x.shape[0]//n_times_crossframe_attn_in_self
+        k = repeat(
+            k[::n_times_crossframe_attn_in_self],	
+            "b ... -> (b n) ...",
+            n=n_times_crossframe_attn_in_self,
+        )
+        v = repeat(
+            v[::n_times_crossframe_attn_in_self],
+            "b ... -> (b n) ...",
+            n=n_times_crossframe_attn_in_self,
+        )
+            
     h = self.heads
 
     q = self.to_q(x)
@@ -119,6 +164,9 @@ def xattn_forward_log(self, x, context=None, mask=None):
     out = einsum('b i j, b j d -> b i d', sim, v)
     out = rearrange(out, '(b h) n d -> b n (h d)', h=h)
     out = self.to_out(out)
+
+    if additional_tokens is not None:
+        out = out[:, n_tokens_to_mask:]
     global current_outsize
     current_outsize = out.shape[-2:]
     return out
@@ -205,8 +253,12 @@ class Script(scripts.Script):
         bh, hw1, hw2 = attn_map.shape
         b, latent_channel, latent_h, latent_w = original_latents.shape
         h=8
-
+        sdxl=False
+        
         middle_layer_latent_size = [math.ceil(latent_h/8), math.ceil(latent_w/8)]
+        if (middle_layer_latent_size[0] * middle_layer_latent_size[1] < hw1):
+            middle_layer_latent_size = [math.ceil(latent_h/4), math.ceil(latent_w/4)]
+            sdxl=True
 
         attn_map = attn_map.reshape(b, h, hw1, hw2)
         attn_mask = attn_map.mean(1, keepdim=False).sum(1, keepdim=False) > sag_mask_threshold
@@ -229,9 +281,16 @@ class Script(scripts.Script):
         current_degraded_pred_compensation = uncond_output - degraded_latents
         if shared.sd_model.model.conditioning_key == "crossattn-adm":
             make_condition_dict = lambda c_crossattn, c_adm: {"c_crossattn": c_crossattn, "c_adm": c_adm}
+        elif sdxl:
+            make_condition_dict = lambda c_crossattn, c_concat: {**c_crossattn, "c_concat": [c_concat]}
         else:
             make_condition_dict = lambda c_crossattn, c_concat: {"c_crossattn": c_crossattn, "c_concat": [c_concat]}
-        degraded_pred = params.inner_model(renoised_degraded_latent, current_unet_kwargs['sigma'], cond=make_condition_dict([current_unet_kwargs['text_uncond']], [current_unet_kwargs['image_cond']]))
+
+        if sdxl:
+            degraded_pred = params.inner_model(renoised_degraded_latent, current_unet_kwargs['sigma'], cond=make_condition_dict(current_unet_kwargs['text_uncond'], [current_unet_kwargs['image_cond']]))
+        else:
+            degraded_pred = params.inner_model(renoised_degraded_latent, current_unet_kwargs['sigma'], cond=make_condition_dict([current_unet_kwargs['text_uncond']], [current_unet_kwargs['image_cond']]))
+
         global current_degraded_pred
         current_degraded_pred = degraded_pred
 
