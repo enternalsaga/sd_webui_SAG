@@ -271,7 +271,10 @@ class Script(scripts.Script):
         attn_mask = F.interpolate(attn_mask, (latent_h, latent_w))
 
         # Blur according to the self-attention mask
-        degraded_latents = gaussian_blur_2d(original_latents, kernel_size=9, sigma=1.0)
+        if not sdxl:
+            degraded_latents = gaussian_blur_2d(original_latents, kernel_size=9, sigma=1.0)
+        else:
+            degraded_latents = gaussian_blur_2d(original_latents, kernel_size=25, sigma=1.0)
         degraded_latents = degraded_latents * attn_mask + original_latents * (1 - attn_mask)
 
         renoised_degraded_latent = degraded_latents - (uncond_output - current_xin)
