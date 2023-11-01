@@ -278,10 +278,7 @@ class Script(scripts.Script):
         degraded_latents = degraded_latents * attn_mask + original_latents * (1 - attn_mask)
 
         renoised_degraded_latent = degraded_latents - (uncond_output - current_xin)
-        # renoised_degraded_latent = degraded_latents
-        # get predicted x0 in degraded direction
-        global current_degraded_pred_compensation
-        current_degraded_pred_compensation = uncond_output - degraded_latents
+
         if shared.sd_model.model.conditioning_key == "crossattn-adm":
             make_condition_dict = lambda c_crossattn, c_adm: {"c_crossattn": c_crossattn, "c_adm": c_adm}
         elif sdxl:
@@ -294,6 +291,11 @@ class Script(scripts.Script):
         else:
             degraded_pred = params.inner_model(renoised_degraded_latent, current_unet_kwargs['sigma'], cond=make_condition_dict([current_unet_kwargs['text_uncond']], [current_unet_kwargs['image_cond']]))
 
+        # renoised_degraded_latent = degraded_latents
+        # get predicted x0 in degraded direction
+        global current_degraded_pred_compensation
+        current_degraded_pred_compensation = uncond_output - degraded_latents
+        
         global current_degraded_pred
         current_degraded_pred = degraded_pred
 
