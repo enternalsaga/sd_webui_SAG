@@ -313,7 +313,7 @@ class Script(scripts.Script):
             with gr.Row():
                 enabled = gr.Checkbox(value=False, label="Enable Self Attention Guidance")
             with gr.Group() as accordion:
-                scale = gr.Slider(label='Scale', minimum=-2.0, maximum=10.0, step=0.01, value=0.75)
+                scale = gr.Slider(label='SAG Guidance Scale', minimum=-2.0, maximum=10.0, step=0.01, value=0.75)
                 mask_threshold = gr.Slider(label='SAG Mask Threshold', minimum=0.0, maximum=2.0, step=0.01, value=1.0)
                 enabled.change(
                     fn=lambda x: {"visible": x, "__type__": "update"},
