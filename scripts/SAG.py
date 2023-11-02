@@ -310,9 +310,28 @@ class Script(scripts.Script):
 
     def ui(self, is_img2img):
         with gr.Accordion('Self Attention Guidance', open=False):
-            enabled = gr.Checkbox(label="Enabled", default=False)
-            scale = gr.Slider(label='Scale', minimum=-2.0, maximum=10.0, step=0.01, value=0.75)
-            mask_threshold = gr.Slider(label='SAG Mask Threshold', minimum=0.0, maximum=2.0, step=0.01, value=1.0)
+            with gr.Row():
+                enabled = gr.Checkbox(value=False, label="Enable Self Attention Guidance")
+            with gr.Group() as accordion:
+                scale = gr.Slider(label='Scale', minimum=-2.0, maximum=10.0, step=0.01, value=0.75)
+                mask_threshold = gr.Slider(label='SAG Mask Threshold', minimum=0.0, maximum=2.0, step=0.01, value=1.0)
+                enabled.change(
+                    fn=lambda x: {"visible": x, "__type__": "update"},
+                    inputs=[enabled],
+                    outputs=[accordion],
+                    show_progress = False)
+
+        self.infotext_fields = []
+        self.paste_field_names = []
+
+        self.infotext_fields = [
+            (enabled, lambda d: gr.Checkbox.update(value="SAG Guidance Enabled" in d)),
+            (scale, "SAG Guidance Scale"),
+            (mask_threshold, "SAG Mask Threshold"),
+        ]
+
+        for _,name in self.infotext_fields:
+            self.paste_field_names.append(name)
 
         return [enabled, scale, mask_threshold]
 
@@ -334,6 +353,7 @@ class Script(scripts.Script):
             saved_original_selfattn_forward = org_attn_module.forward
             org_attn_module.forward = xattn_forward_log.__get__(org_attn_module,org_attn_module.__class__)
 
+            p.extra_generation_params["SAG Guidance Enabled"] = enabled
             p.extra_generation_params["SAG Guidance Scale"] = scale
             p.extra_generation_params["SAG Mask Threshold"] = mask_threshold
 
