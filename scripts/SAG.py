@@ -9,8 +9,6 @@ from modules.processing import StableDiffusionProcessing
 
 import math
 
-
-
 import modules.scripts as scripts
 from modules import shared
 import gradio as gr
@@ -176,6 +174,7 @@ current_selfattn_map = None
 current_sag_guidance_scale = 1.0
 sag_enabled = False
 sag_mask_threshold = 1.0
+sag_blur_sigma = 1.0
 
 current_xin = None
 current_outsize = (64,64)
@@ -236,8 +235,6 @@ class Script(scripts.Script):
             "text_uncond": current_uncond_emb,
         }
 
-
-
     def denoised_callback(self, params: CFGDenoisedParams):
         if not sag_enabled:
             return
@@ -272,9 +269,9 @@ class Script(scripts.Script):
 
         # Blur according to the self-attention mask
         if not sdxl:
-            degraded_latents = gaussian_blur_2d(original_latents, kernel_size=25, sigma=1.0)
+            degraded_latents = gaussian_blur_2d(original_latents, kernel_size=25, sigma=sag_blur_sigma)
         else:
-            degraded_latents = gaussian_blur_2d(original_latents, kernel_size=49, sigma=3.0)
+            degraded_latents = gaussian_blur_2d(original_latents, kernel_size=49, sigma=sag_blur_sigma)
         degraded_latents = degraded_latents * attn_mask + original_latents * (1 - attn_mask)
 
         renoised_degraded_latent = degraded_latents - (uncond_output - current_xin)
@@ -306,44 +303,33 @@ class Script(scripts.Script):
         params.x = params.x + (current_uncond_pred - (current_degraded_pred + current_degraded_pred_compensation)) * float(current_sag_guidance_scale)
         params.output_altered = True
 
-
-
     def ui(self, is_img2img):
         with gr.Accordion('Self Attention Guidance', open=False):
             with gr.Row():
                 enabled = gr.Checkbox(value=False, label="Enable Self Attention Guidance")
             with gr.Group() as accordion:
-                scale = gr.Slider(label='SAG Guidance Scale', minimum=-2.0, maximum=10.0, step=0.01, value=0.75)
-                mask_threshold = gr.Slider(label='SAG Mask Threshold', minimum=0.0, maximum=2.0, step=0.01, value=1.0)
+                scale = gr.Slider(label='Guidance Scale', minimum=-2.0, maximum=10.0, step=0.01, value=0.75)
+                mask_threshold = gr.Slider(label='Mask Threshold', minimum=0.0, maximum=2.0, step=0.01, value=1.0)
+                blur_sigma = gr.Slider(label='Gaussian Blur Sigma', minimum=0.0, maximum=10.0, step=0.01, value=1.0)
                 enabled.change(
                     fn=lambda x: {"visible": x, "__type__": "update"},
                     inputs=[enabled],
                     outputs=[accordion],
                     show_progress = False)
-
-        self.infotext_fields = []
-        self.paste_field_names = []
-
-        self.infotext_fields = [
+        self.infotext_fields = (
             (enabled, lambda d: gr.Checkbox.update(value="SAG Guidance Enabled" in d)),
             (scale, "SAG Guidance Scale"),
             (mask_threshold, "SAG Mask Threshold"),
-        ]
-
-        for _,name in self.infotext_fields:
-            self.paste_field_names.append(name)
-
-        return [enabled, scale, mask_threshold]
-
-
+            (blur_sigma, "SAG Blur Sigma"))
+        return [enabled, scale, mask_threshold, blur_sigma]
 
     def process(self, p: StableDiffusionProcessing, *args, **kwargs):
-        enabled, scale, mask_threshold = args
+        enabled, scale, mask_threshold, blur_sigma = args
         global sag_enabled, sag_mask_threshold
         if enabled:
-
             sag_enabled = True
             sag_mask_threshold = mask_threshold
+            sag_blur_sigma = blur_sigma
             global current_sag_guidance_scale
             current_sag_guidance_scale = scale
             global saved_original_selfattn_forward
@@ -356,29 +342,22 @@ class Script(scripts.Script):
             p.extra_generation_params["SAG Guidance Enabled"] = enabled
             p.extra_generation_params["SAG Guidance Scale"] = scale
             p.extra_generation_params["SAG Mask Threshold"] = mask_threshold
-
+            p.extra_generation_params["SAG Blur Sigma"] = blur_sigma
         else:
             sag_enabled = False
-
 
         if not hasattr(self, 'callbacks_added'):
             on_cfg_denoiser(self.denoiser_callback)
             on_cfg_denoised(self.denoised_callback)
             on_cfg_after_cfg(self.cfg_after_cfg_callback)
             self.callbacks_added = True
-
-
-
-
-
         return
 
     def postprocess(self, p, processed, *args):
-        enabled, scale, sag_mask_threshold = args
+        enabled, scale, sag_mask_threshold, blur_sigma = args
         if enabled:
             # restore original self attention module forward function
-            attn_module = shared.sd_model.model.diffusion_model.middle_block._modules['1'].transformer_blocks._modules[
-                '0'].attn1
+            attn_module = shared.sd_model.model.diffusion_model.middle_block._modules['1'].transformer_blocks._modules['0'].attn1
             attn_module.forward = saved_original_selfattn_forward
         return
 
