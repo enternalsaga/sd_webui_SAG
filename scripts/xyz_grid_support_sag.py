@@ -2,18 +2,8 @@ import os
 import os.path
 import modules.scripts as scripts
 
-
-
-
-
-
 xy_grid = None # XY Grid module
 script_class = None # additional_networks scripts.Script class
-
-
-
-
-
 
 
 def update_script_args(p, value, arg_idx):
@@ -26,31 +16,22 @@ def update_script_args(p, value, arg_idx):
             p.script_args = tuple(args)
             break
 
-
-
-
 def apply_module(p, x, xs, i):
     update_script_args(p, True, 0)       # set Enabled to True
     update_script_args(p, x, 2 + 4 * i)  # enabled, separate_weights, ({module}, model, weight_unet, weight_tenc), ...
-
-
-
 
 def apply_weight(p, x, xs, i):
     update_script_args(p, True, 0)
     update_script_args(p, x, 4 + 4 * i ) # enabled, separate_weights, (module, model, {weight_unet, weight_tenc}), ...
     update_script_args(p, x, 5 + 4 * i)
 
-
 def apply_weight_unet(p, x, xs, i):
     update_script_args(p, True, 0)
     update_script_args(p, x, 4 + 4 * i)  # enabled, separate_weights, (module, model, {weight_unet}, weight_tenc), ...
 
-
 def apply_weight_tenc(p, x, xs, i):
     update_script_args(p, True, 0)
     update_script_args(p, x, 5 + 4 * i)  # enabled, separate_weights, (module, model, weight_unet, {weight_tenc}), ...
-
 
 def apply_sag_guidance_scale(p, x, xs):
     update_script_args(p, x, 0)
@@ -59,8 +40,6 @@ def apply_sag_guidance_scale(p, x, xs):
 def apply_sag_mask_threshold(p, x, xs):
     update_script_args(p, x, 0)
     update_script_args(p, x, 2)# sag_mask_threshold
-
-
 
 
 def initialize(script):
