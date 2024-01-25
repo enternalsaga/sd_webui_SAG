@@ -47,7 +47,7 @@ class LoggedSelfAttention(nn.Module):
         self.attn_probs = None
 
     def forward(self, x, context=None, mask=None, additional_tokens=None, n_times_crossframe_attn_in_self=0):
-         if additional_tokens is not None:
+        if additional_tokens is not None:
             # get the number of masked tokens at the beginning of the output sequence
             n_tokens_to_mask = additional_tokens.shape[1]
             # add additional token
