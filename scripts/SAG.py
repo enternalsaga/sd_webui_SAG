@@ -306,7 +306,7 @@ class Script(scripts.Script):
     def ui(self, is_img2img):
         with gr.Accordion('Self Attention Guidance', open=False):
             with gr.Row():
-                enabled = gr.Checkbox(value=False, label="Enable Self Attention Guidance")
+                enabled = gr.Checkbox(value=False, label="Enable Self Attention Guidance", elem_id="sag_enable")
             with gr.Group() as accordion:
                 scale = gr.Slider(label='Guidance Scale', minimum=-2.0, maximum=10.0, step=0.01, value=0.75)
                 mask_threshold = gr.Slider(label='Mask Threshold', minimum=0.0, maximum=2.0, step=0.01, value=1.0)
